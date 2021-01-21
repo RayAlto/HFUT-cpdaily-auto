@@ -86,7 +86,7 @@ crontab -e
 # 把工作目录移动到脚本所在的目录中
 cd /usr/local/bin/HFUT-cpdaily-auto
 # 直接运行
-/usr/bin/python submit.sh
+/usr/bin/python submit.py
 ```
 
 每天的下午3点都会自动进行填报提交
