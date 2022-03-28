@@ -8,6 +8,7 @@ import base64
 import time
 import json
 
+
 def printLog(text: str) -> None:
     """Print log
     
@@ -21,6 +22,7 @@ def printLog(text: str) -> None:
     global lastLog
     print(f'[{"%.2d-%.2d-%.2d %.2d:%.2d:%.2d" % time.localtime()[:6]}]: {text}')
     lastLog = text
+
 
 def sendServerChan(key: str, text: str, description: str) -> bool:
     """Send a message through ServerChan
@@ -43,21 +45,17 @@ def sendServerChan(key: str, text: str, description: str) -> bool:
       HTTPError from requests
     
     """
-    messageData = {
-        'text': text,
-        'desp': description
-    }
-    sendResponse = requests.post(
-        url=f'https://sc.ftqq.com/{key}.send',
-        data=messageData
-    )
+    messageData = {'text': text, 'desp': description}
+    sendResponse = requests.post(url=f'https://sc.ftqq.com/{key}.send',
+                                 data=messageData)
     sendResponse.raise_for_status()
-    
+
     if 'success' in sendResponse.text:
         printLog('发送Server酱成功。')
         return True
     printLog(f'发送Server酱失败：{sendResponse.text}')
     return False
+
 
 def getConfig() -> dict:
     """Get the configuration from config.json in the current directory
@@ -84,6 +82,7 @@ def getConfig() -> dict:
     configFile.close()
     return json.loads(configText)
 
+
 def encryptPassword(password: str, key: str) -> str:
     """Encrypt password
     
@@ -105,15 +104,16 @@ def encryptPassword(password: str, key: str) -> str:
     padAmount = blockSize - len(password) % blockSize
     padding = chr(padAmount) * padAmount
     encryptedPassword = password + padding
-    
+
     # encrypt password in ECB mode
     aesEncryptor = AES.new(key.encode('utf-8'), AES.MODE_ECB)
     encryptedPassword = aesEncryptor.encrypt(encryptedPassword.encode('utf-8'))
-    
+
     # base64 encode
     encryptedPassword = base64.b64encode(encryptedPassword)
-    
+
     return encryptedPassword.decode('utf-8')
+
 
 def login(username: str, password: str) -> bool:
     """Log in to cas of HFUT
@@ -135,45 +135,56 @@ def login(username: str, password: str) -> bool:
     
     """
     # get cookie: SESSION
+    print('login')
     ignore = requestSession.get('https://cas.hfut.edu.cn/cas/login')
     ignore.raise_for_status()
-    
+
     # get cookie: JSESSIONID
+    print('vercode')
     ignore = requestSession.get('https://cas.hfut.edu.cn/cas/vercode')
     ignore.raise_for_status()
-    
+
     # get encryption key
     timeInMillisecond = round(time.time_ns() / 100000)
+    print('checkInitVercode')
     responseForKey = requestSession.get(
         url='https://cas.hfut.edu.cn/cas/checkInitVercode',
         params={'_': timeInMillisecond})
     responseForKey.raise_for_status()
-    
+
     encryptionKey = responseForKey.cookies['LOGIN_FLAVORING']
-    
+
     # check if verification code is required
     if responseForKey.json():
         printLog('需要验证码，过一会再试试吧。')
         return False
-    
+
     # try to login
     encryptedPassword = encryptPassword(password, encryptionKey)
+    print('checkUserIdenty')
     checkIdResponse = requestSession.get(
         url='https://cas.hfut.edu.cn/cas/policy/checkUserIdenty',
-        params={'_': (timeInMillisecond + 1), 'username': username, 'password': encryptedPassword})
+        params={
+            '_': (timeInMillisecond + 1),
+            'username': username,
+            'password': encryptedPassword
+        })
     checkIdResponse.raise_for_status()
-    
+
     checkIdResponseJson = checkIdResponse.json()
     if checkIdResponseJson['msg'] != 'success':
         # login failed
-        if checkIdResponseJson['data']['mailRequired'] or checkIdResponseJson['data']['phoneRequired']:
+        if checkIdResponseJson['data']['mailRequired'] or checkIdResponseJson[
+                'data']['phoneRequired']:
             # the problem may be solved manually
             printLog('需要进行手机或邮箱认证，移步: https://cas.hfut.edu.cn/')
             return False
         printLog(f'处理checkUserIdenty时出现错误：{checkIdResponseJson["msg"]}')
         return False
-    requestSession.headers.update({'Content-Type': 'application/x-www-form-urlencoded'})
-    
+    requestSession.headers.update(
+        {'Content-Type': 'application/x-www-form-urlencoded'})
+
+    print('login')
     loginResponse = requestSession.post(
         url='https://cas.hfut.edu.cn/cas/login',
         data={
@@ -186,7 +197,7 @@ def login(username: str, password: str) -> bool:
             'submit': "登录"
         })
     loginResponse.raise_for_status()
-    
+
     requestSession.headers.pop('Content-Type')
     if 'cas协议登录成功跳转页面。' not in loginResponse.text:
         # log in failed
@@ -195,6 +206,7 @@ def login(username: str, password: str) -> bool:
     # log in success
     printLog('登录成功')
     return True
+
 
 def submit(location: str) -> bool:
     """Submit using specific location
@@ -212,104 +224,128 @@ def submit(location: str) -> bool:
       HTTPError: Shit happens
     
     """
+    print('index.do')
     ignore = requestSession.get(
-        url='http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/*default/index.do'
-    )
-    ignore.raise_for_status()
-    
+        url='http://stu.hfut.edu.cn/xsfw/sys/swmjbxxapp/*default/index.do')
+    # always 502, ignore this
+    #ignore.raise_for_status()
+
     requestSession.headers.update({
         'Content-Type': 'application/x-www-form-urlencoded',
         'X-Requested-With': 'XMLHttpRequest'
     })
+    print('welcomeAutoIndex.do')
     ignore = requestSession.post(
-        url='http://stu.hfut.edu.cn/xsfw/sys/emapfunauth/welcomeAutoIndex.do'
-    )
+        url='http://stu.hfut.edu.cn/xsfw/sys/emapfunauth/welcomeAutoIndex.do')
     ignore.raise_for_status()
-    
+
     requestSession.headers.pop('Content-Type')
     requestSession.headers.pop('X-Requested-With')
+    print('casValidate.do')
     ignore = requestSession.get(
         url='http://stu.hfut.edu.cn/xsfw/sys/emapfunauth/casValidate.do',
-        params={
-            'service': '/xsfw/sys/swmjbxxapp/*default/index.do'
-        }
-    )
+        params={'service': '/xsfw/sys/swmjbxxapp/*default/index.do'})
     ignore.raise_for_status()
-    
+
     requestSession.headers.update({
-        'X-Requested-With': 'XMLHttpRequest',
-        'Referer': 'http://stu.hfut.edu.cn/xsfw/sys/swmjbxxapp/*default/index.do'
+        'X-Requested-With':
+        'XMLHttpRequest',
+        'Referer':
+        'http://stu.hfut.edu.cn/xsfw/sys/swmjbxxapp/*default/index.do'
     })
+    print('swmxsyqxxsjapp.do')
     ignore = requestSession.get(
-        url='http://stu.hfut.edu.cn/xsfw/sys/emappagelog/config/swmxsyqxxsjapp.do'
-    )
+        url=
+        'http://stu.hfut.edu.cn/xsfw/sys/emappagelog/config/swmxsyqxxsjapp.do')
     ignore.raise_for_status()
-    
+
     # get role config
     requestSession.headers.pop('X-Requested-With')
-    requestSession.headers.update({
-        'Content-Type': 'application/x-www-form-urlencoded'
-    })
+    requestSession.headers.update(
+        {'Content-Type': 'application/x-www-form-urlencoded'})
     configData = {
-        'data': json.dumps({
+        'data':
+        json.dumps({
             'APPID': '5811260348942403',
             'APPNAME': 'swmxsyqxxsjapp'
         })
     }
+    print('getSelRoleConfig.do')
     roleConfigResponse = requestSession.post(
-        url='http://stu.hfut.edu.cn/xsfw/sys/swpubapp/MobileCommon/getSelRoleConfig.do',
-        data=configData
-    )
+        url=
+        'http://stu.hfut.edu.cn/xsfw/sys/swpubapp/MobileCommon/getSelRoleConfig.do',
+        data=configData)
     roleConfigResponse.raise_for_status()
-    
+
     roleConfigJson = roleConfigResponse.json()
     if roleConfigJson['code'] != '0':
         # :(
         printLog(f'处理roleConfig时发生错误：{roleConfigJson["msg"]}')
         return False
-    
+
     # get menu info
+    print('getMenuInfo.do')
     menuInfoResponse = requestSession.post(
-        url='http://stu.hfut.edu.cn/xsfw/sys/swpubapp/MobileCommon/getMenuInfo.do',
-        data=configData
-    )
+        url=
+        'http://stu.hfut.edu.cn/xsfw/sys/swpubapp/MobileCommon/getMenuInfo.do',
+        data=configData)
     menuInfoResponse.raise_for_status()
-    
+
     menuInfoJson = menuInfoResponse.json()
-    
+
     if menuInfoJson['code'] != '0':
         # :(
         printLog(f'处理menuInfo时发生错误：{menuInfoJson["msg"]}')
         return False
-    
+
+    todayDateStr = "%.2d-%.2d-%.2d" % time.localtime()[:3]
+
+    # if submitted
+    print('judgeTodayHasData.do')
+    ifSubmitted = requestSession.post(
+        url=
+        'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/judgeTodayHasData.do',
+        data={'data': json.dumps({'TBSJ': todayDateStr})})
+    ifSubmittedJson = ifSubmitted.json()
+    if len(ifSubmittedJson['data']) == 1:
+        printLog('今天已经打过卡了，处理结束')
+        return False
+
     # get setting... for what?
     requestSession.headers.pop('Content-Type')
+    print('getSetting.do')
     settingResponse = requestSession.get(
-        url='http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/getSetting.do',
-        data={'data': ''}
-    )
+        url=
+        'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/getSetting.do',
+        data={'data': ''})
     settingResponse.raise_for_status()
-    
+
     settingJson = settingResponse.json()
-    
+
     # get the form submitted last time
-    requestSession.headers.update({
-        'Content-Type': 'application/x-www-form-urlencoded'
-    })
-    todayDateStr = "%.2d-%.2d-%.2d" % time.localtime()[:3]
+    requestSession.headers.update(
+        {'Content-Type': 'application/x-www-form-urlencoded'})
+    print('getStuXx.do')
     lastSubmittedResponse = requestSession.post(
-        url='http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/getStuXx.do',
-        data={'data': json.dumps({'TBSJ': todayDateStr})}
-    )
+        url=
+        'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/getStuXx.do',
+        data={'data': json.dumps({'TBSJ': todayDateStr})})
     lastSubmittedResponse.raise_for_status()
-    
+
     lastSubmittedJson = lastSubmittedResponse.json()
-    
+
     if lastSubmittedJson['code'] != '0':
         # something wrong with the form submitted last time
         printLog('上次填报提交的信息出现了问题，本次最好手动填报提交。')
         return False
-    
+
+    print('studentKey.do')
+    studentKeyResponse = requestSession.post(
+        url=
+        'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/studentKey.do',
+        data={})
+    studentKeyJson = studentKeyResponse.json()
+
     # generate today's form to submit
     submitDataToday = lastSubmittedJson['data']
     submitDataToday.update({
@@ -319,28 +355,38 @@ def submit(location: str) -> bool:
         'DZ_TBDZ': location,
         'GCJSRQ': '',
         'GCKSRQ': '',
-        'TBSJ': todayDateStr
+        'TBSJ': todayDateStr,
+        'studentKey': studentKeyJson['data']['studentKey']
     })
-    
+
+    print('setCode.do')
+    paramKeyResponse = requestSession.post(
+        url=
+        'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/setCode.do',
+        data={'data': json.dumps(submitDataToday)})
+    paramKeyJson = paramKeyResponse.json()
+
     # try to submit
+    print('saveStuXx.do')
     submitResponse = requestSession.post(
-        url='http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/saveStuXx.do',
-        data={'data': json.dumps(submitDataToday)}
-    )
+        url=
+        'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/saveStuXx.do',
+        data={'data': json.dumps(paramKeyJson['data'])})
     submitResponse.raise_for_status()
-    
+
     submitResponseJson = submitResponse.json()
-    
+
     if submitResponseJson['code'] != '0':
         # failed
         printLog(f'提交时出现错误：{submitResponseJson["msg"]}')
         return False
-    
+
     # succeeded
     printLog('提交成功')
     requestSession.headers.pop('Referer')
     requestSession.headers.pop('Content-Type')
     return True
+
 
 # main
 userConfig = getConfig()
@@ -350,10 +396,12 @@ for i in userConfig['user']:
     # create a new session
     requestSession = requests.session()
     requestSession.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.141 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
+        'User-Agent':
+        'Mozilla/5.0 (Linux; Android 12; 114514FUCK) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.73 Mobile Safari/537.36',
+        'Accept':
+        'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
     })
-    
+
     printLog(f'开始处理用户{i["username"]}')
     try:
         # login and submit
@@ -364,8 +412,7 @@ for i in userConfig['user']:
                 sendServerChan(
                     key=i['serverChan'],
                     text='今日校园每日疫情填报成功',
-                    description=f'用户{i["username"]}，你的今日校园每日疫情填报成功了！'
-                )
+                    description=f'用户{i["username"]}，你的今日校园每日疫情填报成功了！')
             printLog('当前用户处理成功')
         else:
             # failed
@@ -374,8 +421,7 @@ for i in userConfig['user']:
                 sendServerChan(
                     key=i['serverChan'],
                     text='今日校园每日疫情填报失败',
-                    descriprion=f'用户{i["username"]}，你的今日校园疫情填报失败：{lastLog}'
-                )
+                    descriprion=f'用户{i["username"]}，你的今日校园疫情填报失败：{lastLog}')
             printLog('发生错误，终止当前用户的处理')
     except HTTPError as httpError:
         if i['serverChan']:
@@ -383,7 +429,8 @@ for i in userConfig['user']:
             sendServerChan(
                 key=i['serverChan'],
                 text='今日校园每日疫情填报发生异常',
-                description=f'用户{i["username"]}，你的今日校园疫情填报时发生HTTP异常：{httpError}，建议手动登录查看实际填报情况'
+                description=
+                f'用户{i["username"]}，你的今日校园疫情填报时发生HTTP异常：{httpError}，建议手动登录查看实际填报情况'
             )
         print(f'发生HTTP错误：{httpError}，终止当前用户的处理')
         # process next user
