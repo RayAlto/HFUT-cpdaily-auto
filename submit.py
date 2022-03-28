@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from Crypto.Cipher import AES
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
 from requests.exceptions import HTTPError
 import requests
 import base64
@@ -20,7 +21,8 @@ def printLog(text: str) -> None:
     
     """
     global lastLog
-    print(f'[{"%.2d-%.2d-%.2d %.2d:%.2d:%.2d" % time.localtime()[:6]}]: {text}')
+    print(
+        f'[{"%.2d-%.2d-%.2d %.2d:%.2d:%.2d" % time.localtime()[:6]}]: {text}')
     lastLog = text
 
 
@@ -106,8 +108,11 @@ def encryptPassword(password: str, key: str) -> str:
     encryptedPassword = password + padding
 
     # encrypt password in ECB mode
-    aesEncryptor = AES.new(key.encode('utf-8'), AES.MODE_ECB)
-    encryptedPassword = aesEncryptor.encrypt(encryptedPassword.encode('utf-8'))
+    aesEncryptor = Cipher(algorithms.AES(key.encode('utf-8')),
+                          modes.ECB(),
+                          backend=default_backend()).encryptor()
+    encryptedPassword = aesEncryptor.update(
+        encryptedPassword.encode('utf-8')) + aesEncryptor.finalize()
 
     # base64 encode
     encryptedPassword = base64.b64encode(encryptedPassword)
@@ -135,18 +140,15 @@ def login(username: str, password: str) -> bool:
     
     """
     # get cookie: SESSION
-    print('login')
     ignore = requestSession.get('https://cas.hfut.edu.cn/cas/login')
     ignore.raise_for_status()
 
     # get cookie: JSESSIONID
-    print('vercode')
     ignore = requestSession.get('https://cas.hfut.edu.cn/cas/vercode')
     ignore.raise_for_status()
 
     # get encryption key
     timeInMillisecond = round(time.time_ns() / 100000)
-    print('checkInitVercode')
     responseForKey = requestSession.get(
         url='https://cas.hfut.edu.cn/cas/checkInitVercode',
         params={'_': timeInMillisecond})
@@ -161,7 +163,6 @@ def login(username: str, password: str) -> bool:
 
     # try to login
     encryptedPassword = encryptPassword(password, encryptionKey)
-    print('checkUserIdenty')
     checkIdResponse = requestSession.get(
         url='https://cas.hfut.edu.cn/cas/policy/checkUserIdenty',
         params={
@@ -184,7 +185,6 @@ def login(username: str, password: str) -> bool:
     requestSession.headers.update(
         {'Content-Type': 'application/x-www-form-urlencoded'})
 
-    print('login')
     loginResponse = requestSession.post(
         url='https://cas.hfut.edu.cn/cas/login',
         data={
@@ -224,7 +224,6 @@ def submit(location: str) -> bool:
       HTTPError: Shit happens
     
     """
-    print('index.do')
     ignore = requestSession.get(
         url='http://stu.hfut.edu.cn/xsfw/sys/swmjbxxapp/*default/index.do')
     # always 502, ignore this
@@ -234,14 +233,12 @@ def submit(location: str) -> bool:
         'Content-Type': 'application/x-www-form-urlencoded',
         'X-Requested-With': 'XMLHttpRequest'
     })
-    print('welcomeAutoIndex.do')
     ignore = requestSession.post(
         url='http://stu.hfut.edu.cn/xsfw/sys/emapfunauth/welcomeAutoIndex.do')
     ignore.raise_for_status()
 
     requestSession.headers.pop('Content-Type')
     requestSession.headers.pop('X-Requested-With')
-    print('casValidate.do')
     ignore = requestSession.get(
         url='http://stu.hfut.edu.cn/xsfw/sys/emapfunauth/casValidate.do',
         params={'service': '/xsfw/sys/swmjbxxapp/*default/index.do'})
@@ -253,7 +250,6 @@ def submit(location: str) -> bool:
         'Referer':
         'http://stu.hfut.edu.cn/xsfw/sys/swmjbxxapp/*default/index.do'
     })
-    print('swmxsyqxxsjapp.do')
     ignore = requestSession.get(
         url=
         'http://stu.hfut.edu.cn/xsfw/sys/emappagelog/config/swmxsyqxxsjapp.do')
@@ -270,7 +266,6 @@ def submit(location: str) -> bool:
             'APPNAME': 'swmxsyqxxsjapp'
         })
     }
-    print('getSelRoleConfig.do')
     roleConfigResponse = requestSession.post(
         url=
         'http://stu.hfut.edu.cn/xsfw/sys/swpubapp/MobileCommon/getSelRoleConfig.do',
@@ -284,7 +279,6 @@ def submit(location: str) -> bool:
         return False
 
     # get menu info
-    print('getMenuInfo.do')
     menuInfoResponse = requestSession.post(
         url=
         'http://stu.hfut.edu.cn/xsfw/sys/swpubapp/MobileCommon/getMenuInfo.do',
@@ -301,7 +295,6 @@ def submit(location: str) -> bool:
     todayDateStr = "%.2d-%.2d-%.2d" % time.localtime()[:3]
 
     # if submitted
-    print('judgeTodayHasData.do')
     ifSubmitted = requestSession.post(
         url=
         'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/judgeTodayHasData.do',
@@ -313,7 +306,6 @@ def submit(location: str) -> bool:
 
     # get setting... for what?
     requestSession.headers.pop('Content-Type')
-    print('getSetting.do')
     settingResponse = requestSession.get(
         url=
         'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/getSetting.do',
@@ -325,7 +317,6 @@ def submit(location: str) -> bool:
     # get the form submitted last time
     requestSession.headers.update(
         {'Content-Type': 'application/x-www-form-urlencoded'})
-    print('getStuXx.do')
     lastSubmittedResponse = requestSession.post(
         url=
         'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/getStuXx.do',
@@ -339,7 +330,6 @@ def submit(location: str) -> bool:
         printLog('上次填报提交的信息出现了问题，本次最好手动填报提交。')
         return False
 
-    print('studentKey.do')
     studentKeyResponse = requestSession.post(
         url=
         'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/studentKey.do',
@@ -359,7 +349,6 @@ def submit(location: str) -> bool:
         'studentKey': studentKeyJson['data']['studentKey']
     })
 
-    print('setCode.do')
     paramKeyResponse = requestSession.post(
         url=
         'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/setCode.do',
@@ -367,7 +356,6 @@ def submit(location: str) -> bool:
     paramKeyJson = paramKeyResponse.json()
 
     # try to submit
-    print('saveStuXx.do')
     submitResponse = requestSession.post(
         url=
         'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/saveStuXx.do',
