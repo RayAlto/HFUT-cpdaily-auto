@@ -4,13 +4,13 @@
             "username": "2018888888",
             "password": "888888",
             "location": "Toilet, Home, China",
-            "serverChan": "xxxx"
+            "region": "Beijing//Japan//moscow"
         },
-	{
-	    "username": "2017777777",
-	    "password": "777777",
-	    "location": "Bed, Home, China",
-	    "serverChan": null
-	}
+        {
+            "username": "2017777777",
+            "password": "777777",
+            "location": "Bed, Home, China",
+            "region": "Beijing//Japan//moscow"
+        }
     ]
 }

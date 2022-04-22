@@ -37,7 +37,8 @@ def getConfig() -> dict:
               {
                   "username": "201688888888",
                   "password": "888888",
-                  "location": "Toilet, Home, China"
+                  "location": "Toilet, Home, China",
+                  "region": "Beijing//Japan//moscow"
               },
               { ... More users ... }
           ]
@@ -174,7 +175,7 @@ def login(username: str, password: str) -> bool:
     return True
 
 
-def submit(location: str) -> bool:
+def submit(location: str, region: str) -> bool:
     """Submit using specific location
     
     submit today's form based on the form submitted last time using specific loaction
@@ -309,6 +310,7 @@ def submit(location: str) -> bool:
         'DFHTJHBSJ': '',
         'DZ_SFSB': '1',
         'DZ_TBDZ': location,
+        'DZ_TBSJDZ': region,
         'GCJSRQ': '',
         'GCKSRQ': '',
         'TBSJ': todayDateStr,
@@ -359,7 +361,8 @@ for i in userConfig['user']:
     printLog(f'开始处理用户{i["username"]}')
     try:
         # login and submit
-        if login(i['username'], i['password']) and submit(i['location']):
+        if login(i['username'], i['password']) and submit(
+                i['location'], i['region']):
             # succeed
             printLog('当前用户处理成功')
         else:
