@@ -26,39 +26,6 @@ def printLog(text: str) -> None:
     lastLog = text
 
 
-def sendServerChan(key: str, text: str, description: str) -> bool:
-    """Send a message through ServerChan
-    
-    Send a message with title and details through ServerChan. you can check the sent message through WeChat,
-    the title will be fully displayed, however, you need to click the details button for details.
-    
-    Args:
-      key:
-        SCKEY for your serverChan
-      text:
-        The title of the message you want to send
-      description:
-        The detail of the message you want to send
-    
-    Return:
-      True if sent successfully
-    
-    Raises:
-      HTTPError from requests
-    
-    """
-    messageData = {'text': text, 'desp': description}
-    sendResponse = requests.post(url=f'https://sc.ftqq.com/{key}.send',
-                                 data=messageData)
-    sendResponse.raise_for_status()
-
-    if 'success' in sendResponse.text:
-        printLog('发送Server酱成功。')
-        return True
-    printLog(f'发送Server酱失败：{sendResponse.text}')
-    return False
-
-
 def getConfig() -> dict:
     """Get the configuration from config.json in the current directory
     
@@ -70,8 +37,7 @@ def getConfig() -> dict:
               {
                   "username": "201688888888",
                   "password": "888888",
-                  "location": "Toilet, Home, China",
-                  "serverChan": "xxx"
+                  "location": "Toilet, Home, China"
               },
               { ... More users ... }
           ]
@@ -395,31 +361,11 @@ for i in userConfig['user']:
         # login and submit
         if login(i['username'], i['password']) and submit(i['location']):
             # succeed
-            if i['serverChan']:
-                # has SCKEY, send success prompt
-                sendServerChan(
-                    key=i['serverChan'],
-                    text='今日校园每日疫情填报成功',
-                    description=f'用户{i["username"]}，你的今日校园每日疫情填报成功了！')
             printLog('当前用户处理成功')
         else:
             # failed
-            if i['serverChan']:
-                # has SCKEY, send error message
-                sendServerChan(
-                    key=i['serverChan'],
-                    text='今日校园每日疫情填报失败',
-                    descriprion=f'用户{i["username"]}，你的今日校园疫情填报失败：{lastLog}')
             printLog('发生错误，终止当前用户的处理')
     except HTTPError as httpError:
-        if i['serverChan']:
-            # has SCKEY, send exception message
-            sendServerChan(
-                key=i['serverChan'],
-                text='今日校园每日疫情填报发生异常',
-                description=
-                f'用户{i["username"]}，你的今日校园疫情填报时发生HTTP异常：{httpError}，建议手动登录查看实际填报情况'
-            )
         print(f'发生HTTP错误：{httpError}，终止当前用户的处理')
         # process next user
         continue
