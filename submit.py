@@ -175,7 +175,7 @@ def login(username: str, password: str) -> bool:
     return True
 
 
-def submit(location: str, region: str) -> bool:
+def submit(location: str, region: str, username: str) -> bool:
     """Submit using specific location
     
     submit today's form based on the form submitted last time using specific loaction
@@ -297,6 +297,20 @@ def submit(location: str, region: str) -> bool:
         printLog('上次填报提交的信息出现了问题，本次最好手动填报提交。')
         return False
 
+    # get the form submitted yesterday
+    todayDateStr_tmp = "%.2d-%.2d" % time.localtime()[:2]
+    yes_day = time.localtime().tm_mday - 1
+    yes_DateStr = f'{todayDateStr_tmp}-{yes_day}-{username}'
+    requestSession.headers.update(
+        {'Content-Type': 'application/x-www-form-urlencoded'})
+    yes_SubmittedResponse = requestSession.post(
+        url=
+        'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/getStuXx.do',
+        data={'data': json.dumps({'WID': yes_DateStr,'TBSJ': todayDateStr})})
+    yes_SubmittedResponse.raise_for_status()
+
+    yes_SubmittedJson = yes_SubmittedResponse.json()
+
     studentKeyResponse = requestSession.post(
         url=
         'http://stu.hfut.edu.cn/xsfw/sys/swmxsyqxxsjapp/modules/mrbpa/studentKey.do',
@@ -311,6 +325,12 @@ def submit(location: str, region: str) -> bool:
         'DZ_SFSB': '1',
         'DZ_TBDZ': location,
         'DZ_TBSJDZ': region,
+        "DZ_AKMSFYC_DISPLAY": "否",
+        "DZ_XCKSFYC_DISPLAY": "否",
+        "DZ_AKMSFYC": "0",
+        "DZ_XCKSFYC": "0",
+        "DZ_SCAKMJT": yes_SubmittedJson['data']['DZ_SCAKMJT'],
+        "DZ_SCXCKJT": yes_SubmittedJson['data']['DZ_SCXCKJT'],
         'GCJSRQ': '',
         'GCKSRQ': '',
         'TBSJ': todayDateStr,
@@ -362,7 +382,7 @@ for i in userConfig['user']:
     try:
         # login and submit
         if login(i['username'], i['password']) and submit(
-                i['location'], i['region']):
+                i['location'], i['region'], i['username']):
             # succeed
             printLog('当前用户处理成功')
         else:
@@ -372,5 +392,12 @@ for i in userConfig['user']:
         print(f'发生HTTP错误：{httpError}，终止当前用户的处理')
         # process next user
         continue
+    except KeyError as e:
+        if str(e) == "'data'":
+            printLog(f'{i["username"]}前一天未打卡，无法自动打卡，已跳过')
+            continue
+        else:
+            print(f'出现错误：{e}，可能是网站又又又炸了')
+            break
 
 printLog('所有用户处理结束')
