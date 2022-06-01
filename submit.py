@@ -7,6 +7,7 @@ from requests.exceptions import HTTPError
 import requests
 import base64
 import time
+from datetime import date, timedelta
 import json
 
 
@@ -298,9 +299,8 @@ def submit(location: str, region: str, username: str) -> bool:
         return False
 
     # get the form submitted yesterday
-    todayDateStr_tmp = "%.2d-%.2d" % time.localtime()[:2]
-    yes_day = time.localtime().tm_mday - 1
-    yes_DateStr = f'{todayDateStr_tmp}-{yes_day}-{username}'
+    todayDateStr_tmp = (date.today() + timedelta(days = -1)).strftime("%Y-%m-%d")
+    yes_DateStr = f'{todayDateStr_tmp}-{username}'
     requestSession.headers.update(
         {'Content-Type': 'application/x-www-form-urlencoded'})
     yes_SubmittedResponse = requestSession.post(
